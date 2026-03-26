@@ -1,11 +1,16 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowDownUp, Lock, ChevronDown, Info } from "lucide-react";
+import { ArrowDownUp, Lock, ChevronDown, Info, Loader2 } from "lucide-react";
+import { useAccount } from "wagmi";
+import { parseUnits } from "viem";
+import { useSubmitOrder, useProtocolAddresses } from "@/hooks/usePrivateFill";
+import { useVaultBalance } from "@/hooks/useSettlementVault";
+import { toast } from "sonner";
 
 const TOKENS = [
-  { symbol: "ETH", name: "Ethereum", icon: "Ξ" },
-  { symbol: "USDC", name: "USD Coin", icon: "$" },
-  { symbol: "WBTC", name: "Wrapped BTC", icon: "₿" },
+  { symbol: "ETH", name: "Ethereum", icon: "\u039E", decimals: 18 },
+  { symbol: "USDC", name: "USD Coin", icon: "$", decimals: 6 },
+  { symbol: "WBTC", name: "Wrapped BTC", icon: "\u20BF", decimals: 8 },
 ];
 
 const OrderForm = () => {
@@ -15,10 +20,49 @@ const OrderForm = () => {
   const [fromToken, setFromToken] = useState(TOKENS[1]);
   const [toToken, setToToken] = useState(TOKENS[0]);
 
+  const { isConnected } = useAccount();
+  const { deployed, addresses } = useProtocolAddresses();
+  const { submitOrder, isPending, isSuccess, isError, error } = useSubmitOrder();
+
+  const baseBalance = useVaultBalance(addresses?.baseToken);
+  const quoteBalance = useVaultBalance(addresses?.quoteToken);
+
   const handleSwapDirection = () => {
     setIsBuy(!isBuy);
     setFromToken(isBuy ? TOKENS[0] : TOKENS[1]);
     setToToken(isBuy ? TOKENS[1] : TOKENS[0]);
+  };
+
+  const handleSubmit = () => {
+    if (!amount || !price) {
+      toast.error("Enter amount and price");
+      return;
+    }
+    if (!isConnected) {
+      toast.error("Connect wallet first");
+      return;
+    }
+    if (!deployed) {
+      toast.info("Demo mode: contracts not deployed yet. Order simulated!", {
+        description: `${isBuy ? "BUY" : "SELL"} ${amount} ${toToken.symbol} @ $${price}`,
+      });
+      setAmount("");
+      setPrice("");
+      return;
+    }
+
+    try {
+      const parsedAmount = parseUnits(amount, toToken.decimals);
+      const parsedPrice = parseUnits(price, 8); // oracle decimals = 8
+      submitOrder(isBuy ? 0 : 1, parsedAmount, parsedPrice);
+      toast.success("Encrypting & submitting order...", {
+        description: "Your order parameters are encrypted via CoFHE before on-chain submission.",
+      });
+      setAmount("");
+      setPrice("");
+    } catch {
+      toast.error("Invalid input values");
+    }
   };
 
   return (
@@ -58,7 +102,11 @@ const OrderForm = () => {
       <div className="bg-secondary/50 rounded-lg p-4 mb-2">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-mono text-muted-foreground">You Pay</span>
-          <span className="text-xs font-mono text-muted-foreground">Balance: —</span>
+          <span className="text-xs font-mono text-muted-foreground">
+            Vault: {deployed && (isBuy ? quoteBalance.balance : baseBalance.balance) !== undefined
+              ? Number((isBuy ? quoteBalance.balance : baseBalance.balance)! / BigInt(10 ** (isBuy ? 6 : 18))).toLocaleString()
+              : "\u2014"}
+          </span>
         </div>
         <div className="flex items-center gap-3">
           <input
@@ -95,6 +143,7 @@ const OrderForm = () => {
             type="text"
             placeholder="0.00"
             readOnly
+            value={amount && price ? (isBuy ? (Number(amount) / Number(price) * 1).toFixed(6) : (Number(amount) * Number(price)).toFixed(2)) : ""}
             className="flex-1 bg-transparent text-2xl font-mono font-semibold text-foreground outline-none placeholder:text-muted-foreground/40"
           />
           <TokenSelector token={toToken} />
@@ -110,7 +159,7 @@ const OrderForm = () => {
         </div>
         <input
           type="text"
-          placeholder="Market price ± slippage"
+          placeholder="Market price \u00B1 slippage"
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           className="w-full mt-2 bg-transparent text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground/40"
@@ -129,13 +178,24 @@ const OrderForm = () => {
       <motion.button
         whileHover={{ scale: 1.01 }}
         whileTap={{ scale: 0.99 }}
-        className={`w-full py-4 rounded-lg font-display font-semibold text-sm tracking-wide transition-all ${
+        onClick={handleSubmit}
+        disabled={isPending || !amount || !price}
+        className={`w-full py-4 rounded-lg font-display font-semibold text-sm tracking-wide transition-all disabled:opacity-50 ${
           isBuy
             ? "bg-primary text-primary-foreground glow-neon hover:glow-neon-strong"
             : "bg-destructive text-destructive-foreground hover:brightness-110"
         }`}
       >
-        {isBuy ? "Encrypt & Submit Buy Order" : "Encrypt & Submit Sell Order"}
+        {isPending ? (
+          <span className="flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Submitting...
+          </span>
+        ) : !isConnected ? (
+          "Connect Wallet to Trade"
+        ) : (
+          isBuy ? "Encrypt & Submit Buy Order" : "Encrypt & Submit Sell Order"
+        )}
       </motion.button>
     </motion.div>
   );
