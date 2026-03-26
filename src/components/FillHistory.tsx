@@ -1,5 +1,9 @@
 import { motion } from "framer-motion";
-import { ArrowRight, ExternalLink, CheckCircle2 } from "lucide-react";
+import { ArrowRight, ExternalLink, CheckCircle2, Loader2 } from "lucide-react";
+import { useFillEvents } from "@/hooks/useContractEvents";
+import { useMatchRecord, useProtocolAddresses } from "@/hooks/usePrivateFill";
+import { useChainId } from "wagmi";
+import { formatUnits } from "viem";
 
 interface Fill {
   id: string;
@@ -56,6 +60,28 @@ const MOCK_FILLS: Fill[] = [
 ];
 
 const FillHistory = () => {
+  const { deployed } = useProtocolAddresses();
+  const { fills: onChainFills, loading } = useFillEvents();
+  const chainId = useChainId();
+
+  const explorerBase = chainId === 421614
+    ? "https://sepolia.arbiscan.io/tx/"
+    : "https://sepolia.basescan.org/tx/";
+
+  // Map on-chain fills to display format if deployed
+  const displayFills: Fill[] = deployed && onChainFills.length > 0
+    ? onChainFills.map((evt) => ({
+        id: evt.matchId.toString(),
+        buyTrader: `0x${evt.transactionHash.slice(2, 6)}...${evt.transactionHash.slice(-4)}`,
+        sellTrader: `0x${evt.revealer.slice(2, 6)}...${evt.revealer.slice(-4)}`,
+        pair: "ETH/USDC",
+        amount: `${formatUnits(evt.fillAmount, 18)} ETH`,
+        price: `$${Number(formatUnits(evt.quoteAmount, 6)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        timestamp: `Block ${evt.blockNumber.toString()}`,
+        txHash: evt.transactionHash,
+      }))
+    : MOCK_FILLS;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -69,20 +95,31 @@ const FillHistory = () => {
           Settlement Feed
         </h3>
         <span className="text-[10px] font-mono text-muted-foreground px-2 py-1 bg-secondary rounded">
-          PUBLIC REVEALS ONLY
+          {deployed ? "LIVE" : "DEMO"}
         </span>
       </div>
 
-      <div className="space-y-2">
-        {MOCK_FILLS.map((fill, i) => (
-          <FillRow key={fill.id} fill={fill} index={i} />
-        ))}
-      </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-5 h-5 text-accent animate-spin" />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {displayFills.map((fill, i) => (
+            <FillRow
+              key={fill.id}
+              fill={fill}
+              index={i}
+              explorerBase={deployed ? explorerBase : undefined}
+            />
+          ))}
+        </div>
+      )}
     </motion.div>
   );
 };
 
-const FillRow = ({ fill, index }: { fill: Fill; index: number }) => (
+const FillRow = ({ fill, index, explorerBase }: { fill: Fill; index: number; explorerBase?: string }) => (
   <motion.div
     initial={{ opacity: 0, x: 10 }}
     animate={{ opacity: 1, x: 0 }}
@@ -108,9 +145,20 @@ const FillRow = ({ fill, index }: { fill: Fill; index: number }) => (
       <div className="text-[10px] font-mono text-muted-foreground">{fill.timestamp}</div>
     </div>
 
-    <button className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-      <ExternalLink className="w-3 h-3 text-muted-foreground hover:text-primary" />
-    </button>
+    {explorerBase ? (
+      <a
+        href={`${explorerBase}${fill.txHash}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+      >
+        <ExternalLink className="w-3 h-3 text-muted-foreground hover:text-primary" />
+      </a>
+    ) : (
+      <button className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <ExternalLink className="w-3 h-3 text-muted-foreground hover:text-primary" />
+      </button>
+    )}
   </motion.div>
 );
 
