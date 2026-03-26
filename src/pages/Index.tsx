@@ -4,6 +4,7 @@ import MyOrders from "@/components/MyOrders";
 import FillHistory from "@/components/FillHistory";
 import StatsBar from "@/components/StatsBar";
 import ArchitectureDiagram from "@/components/ArchitectureDiagram";
+import VaultPanel from "@/components/VaultPanel";
 import { motion } from "framer-motion";
 import { Shield, Lock, Zap } from "lucide-react";
 
@@ -52,9 +53,10 @@ const Index = () => {
         {/* Main Trading Interface */}
         <section className="container px-4 pb-16">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left: Order Form */}
-            <div className="lg:col-span-4">
+            {/* Left: Order Form + Vault */}
+            <div className="lg:col-span-4 space-y-6">
               <OrderForm />
+              <VaultPanel />
             </div>
 
             {/* Center: My Orders */}
@@ -77,7 +79,7 @@ const Index = () => {
               PrivateFill · Built by IBX Lab · Fhenix WaveHack
             </span>
             <span className="text-[10px] font-mono text-muted-foreground">
-              Arbitrum Sepolia · Testnet
+              Arbitrum Sepolia · Base Sepolia · Testnet
             </span>
           </div>
         </footer>
