@@ -1,14 +1,30 @@
 import { motion } from "framer-motion";
 import { Shield, TrendingUp, Activity, Users } from "lucide-react";
-
-const stats = [
-  { label: "MEV Extracted", value: "$0.00", sublabel: "vs $12.4K on public DEX", icon: Shield, color: "text-primary" },
-  { label: "Oracle Price", value: "$3,418.52", sublabel: "ETH/USD · Chainlink", icon: TrendingUp, color: "text-accent" },
-  { label: "Active Orders", value: "47", sublabel: "encrypted on-chain", icon: Activity, color: "text-terminal" },
-  { label: "Unique Traders", value: "12", sublabel: "last 24h", icon: Users, color: "text-neon-purple" },
-];
+import { useProtocolStats } from "@/hooks/usePrivateFill";
+import { formatUnits } from "viem";
 
 const StatsBar = () => {
+  const { orderCount, matchCount, oraclePrice, oracleDecimals, deployed } = useProtocolStats();
+
+  const formattedPrice = oraclePrice && oracleDecimals
+    ? `$${Number(formatUnits(oraclePrice, oracleDecimals)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : "$3,418.52";
+
+  const activeOrders = deployed && orderCount !== undefined
+    ? orderCount.toString()
+    : "47";
+
+  const totalMatches = deployed && matchCount !== undefined
+    ? matchCount.toString()
+    : "12";
+
+  const stats = [
+    { label: "MEV Extracted", value: "$0.00", sublabel: deployed ? "dark pool active" : "vs $12.4K on public DEX", icon: Shield, color: "text-primary" },
+    { label: "Oracle Price", value: formattedPrice, sublabel: "ETH/USD · Chainlink", icon: TrendingUp, color: "text-accent" },
+    { label: "Active Orders", value: activeOrders, sublabel: deployed ? "on-chain" : "encrypted on-chain", icon: Activity, color: "text-terminal" },
+    { label: "Settlements", value: totalMatches, sublabel: deployed ? "fills published" : "last 24h", icon: Users, color: "text-neon-purple" },
+  ];
+
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {stats.map((stat, i) => (
@@ -29,6 +45,13 @@ const StatsBar = () => {
           <div className="text-[10px] font-mono text-muted-foreground mt-1">{stat.sublabel}</div>
         </motion.div>
       ))}
+      {!deployed && (
+        <div className="col-span-full">
+          <div className="text-center text-[10px] font-mono text-muted-foreground/50 mt-1">
+            Demo mode — deploy contracts to see live data
+          </div>
+        </div>
+      )}
     </div>
   );
 };
