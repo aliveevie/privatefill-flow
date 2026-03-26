@@ -1,8 +1,13 @@
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Clock, XCircle } from "lucide-react";
+import { Eye, EyeOff, Clock, XCircle, Loader2 } from "lucide-react";
+import { useAccount } from "wagmi";
+import { useMyOrderEvents } from "@/hooks/useContractEvents";
+import { useCancelOrder, useProtocolAddresses } from "@/hooks/usePrivateFill";
+import { toast } from "sonner";
 
 interface Order {
   id: string;
+  orderId?: bigint;
   direction: "BUY" | "SELL";
   pair: string;
   encryptedAmount: string;
@@ -45,6 +50,24 @@ const MOCK_ORDERS: Order[] = [
 ];
 
 const MyOrders = () => {
+  const { isConnected } = useAccount();
+  const { deployed } = useProtocolAddresses();
+  const { orders: onChainOrders, loading } = useMyOrderEvents();
+
+  // Map on-chain events to Order format if deployed, otherwise use mocks
+  const displayOrders: Order[] = deployed && onChainOrders.length > 0
+    ? onChainOrders.map((evt) => ({
+        id: `0x${evt.orderId.toString(16).slice(0, 4)}`,
+        orderId: evt.orderId,
+        direction: evt.side === 0 ? "BUY" : "SELL",
+        pair: "ETH/USDC",
+        encryptedAmount: `0x${evt.transactionHash.slice(2, 6)}...${evt.transactionHash.slice(-4)}`,
+        encryptedPrice: `0x${evt.transactionHash.slice(6, 10)}...${evt.transactionHash.slice(-4)}`,
+        status: "active" as const,
+        timestamp: `Block ${evt.blockNumber.toString()}`,
+      }))
+    : MOCK_ORDERS;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -58,19 +81,25 @@ const MyOrders = () => {
           My Orders
         </h3>
         <span className="text-[10px] font-mono text-muted-foreground px-2 py-1 bg-secondary rounded">
-          PERMITTED DECRYPT
+          {deployed ? "LIVE" : "DEMO"}
         </span>
       </div>
 
-      <div className="space-y-3">
-        {MOCK_ORDERS.map((order, i) => (
-          <OrderRow key={order.id} order={order} index={i} />
-        ))}
-      </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-5 h-5 text-primary animate-spin" />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {displayOrders.map((order, i) => (
+            <OrderRow key={order.id + i} order={order} index={i} />
+          ))}
+        </div>
+      )}
 
-      {MOCK_ORDERS.length === 0 && (
+      {!loading && displayOrders.length === 0 && (
         <div className="text-center py-8 text-muted-foreground font-mono text-sm">
-          No active orders
+          {isConnected ? "No active orders" : "Connect wallet to view orders"}
         </div>
       )}
     </motion.div>
@@ -78,6 +107,18 @@ const MyOrders = () => {
 };
 
 const OrderRow = ({ order, index }: { order: Order; index: number }) => {
+  const { cancelOrder, isPending: isCancelling } = useCancelOrder();
+  const { deployed } = useProtocolAddresses();
+
+  const handleCancel = () => {
+    if (order.orderId && deployed) {
+      cancelOrder(order.orderId);
+      toast.info("Cancelling order...");
+    } else {
+      toast.info("Demo: order cancelled");
+    }
+  };
+
   const statusConfig = {
     active: { color: "text-primary", bg: "bg-primary/10", label: "Active" },
     partial: { color: "text-accent", bg: "bg-accent/10", label: "Partial Fill" },
@@ -136,8 +177,13 @@ const OrderRow = ({ order, index }: { order: Order; index: number }) => {
           <Clock className="w-3 h-3" /> {order.timestamp}
         </span>
         {order.status === "active" && (
-          <button className="text-[10px] font-mono text-destructive/60 hover:text-destructive flex items-center gap-1 transition-colors">
-            <XCircle className="w-3 h-3" /> Cancel
+          <button
+            onClick={handleCancel}
+            disabled={isCancelling}
+            className="text-[10px] font-mono text-destructive/60 hover:text-destructive flex items-center gap-1 transition-colors disabled:opacity-50"
+          >
+            {isCancelling ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
+            Cancel
           </button>
         )}
       </div>
