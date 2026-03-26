@@ -4,13 +4,13 @@ const ArchitectureDiagram = () => {
   const layers = [
     {
       label: "CLIENT",
-      items: ["React UI", "@cofhe/sdk encrypt", "wagmi tx"],
+      items: ["React UI", "wagmi/viem", "CoFHE Encrypt"],
       color: "border-primary/40",
       glow: "bg-primary/5",
     },
     {
       label: "CONTRACTS",
-      items: ["OrderBook.sol", "MatchingEngine.sol", "OracleGuard.sol"],
+      items: ["PrivateFill.sol", "SettlementVault.sol", "OracleGuard.sol"],
       color: "border-accent/40",
       glow: "bg-accent/5",
     },
